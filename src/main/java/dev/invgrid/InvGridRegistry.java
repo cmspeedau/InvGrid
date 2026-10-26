@@ -1,14 +1,17 @@
 package dev.invgrid;
 
+import dev.invgrid.block.GridCableBlock;
 import dev.invgrid.block.GridHubBlock;
 import dev.invgrid.block.InventoryPanelBlock;
 import dev.invgrid.block.StorageCrateBlock;
+import dev.invgrid.blockentity.GridCableBlockEntity;
 import dev.invgrid.item.GridCardItem;
 import dev.invgrid.menu.InventoryPanelMenu;
 import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraftforge.common.extensions.IForgeMenuType;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.registries.DeferredRegister;
@@ -25,11 +28,17 @@ public final class InvGridRegistry {
     public static final DeferredRegister<Block> BLOCKS = DeferredRegister.create(ForgeRegistries.BLOCKS, InvGrid.MODID);
     public static final DeferredRegister<Item> ITEMS = DeferredRegister.create(ForgeRegistries.ITEMS, InvGrid.MODID);
     public static final DeferredRegister<MenuType<?>> MENU_TYPES = DeferredRegister.create(ForgeRegistries.MENU_TYPES, InvGrid.MODID);
+    public static final DeferredRegister<BlockEntityType<?>> BLOCK_ENTITY_TYPES =
+            DeferredRegister.create(ForgeRegistries.BLOCK_ENTITY_TYPES, InvGrid.MODID);
 
     public static final RegistryObject<Block> GRID_HUB = BLOCKS.register("grid_hub", GridHubBlock::new);
-    public static final RegistryObject<Block> INVGRID_CABLE = BLOCKS.register("invgrid_cable", GridHubBlock::new); // TODO: cable block with proper shape
+    public static final RegistryObject<Block> INVGRID_CABLE = BLOCKS.register("invgrid_cable", GridCableBlock::new);
     public static final RegistryObject<Block> INVENTORY_PANEL = BLOCKS.register("inventory_panel", InventoryPanelBlock::new);
     public static final RegistryObject<Block> STORAGE_CRATE = BLOCKS.register("storage_crate", StorageCrateBlock::new);
+
+    public static final RegistryObject<BlockEntityType<GridCableBlockEntity>> CABLE_BLOCK_ENTITY =
+            BLOCK_ENTITY_TYPES.register("invgrid_cable",
+                    () -> BlockEntityType.Builder.of(GridCableBlockEntity::new, INVGRID_CABLE.get()).build(null));
 
     public static final RegistryObject<Item> GRID_CARD = ITEMS.register("grid_card",
             () -> new GridCardItem(new Item.Properties().stacksTo(1)));
