@@ -1,11 +1,11 @@
 package dev.invgrid.block;
 
+import dev.invgrid.InvGridRegistry;
 import dev.invgrid.blockentity.BioBurnerBlockEntity;
 import dev.invgrid.grid.IGridMember;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BaseEntityBlock;
-import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityTicker;
@@ -17,8 +17,7 @@ import org.jetbrains.annotations.Nullable;
  * Bio Burner: the grid's generator. Burns furnace fuels from its single input
  * slot and produces Forge Energy, pushing it into adjacent energy consumers
  * and GridCable segments each tick. Implements IGridMember so the flood fill
- * treats it as part of the network (an island burner alone still generates,
- * but can only serve direct neighbors until cabled in).
+ * treats it as part of the network.
  */
 public class BioBurnerBlock extends BaseEntityBlock implements IGridMember {
 
@@ -39,12 +38,14 @@ public class BioBurnerBlock extends BaseEntityBlock implements IGridMember {
 
     @Nullable
     @Override
+    @SuppressWarnings("unchecked")
     public <T extends BlockEntity> BlockEntityTicker<T> getTicker(Level level, BlockState state, BlockEntityType<T> type) {
         if (level.isClientSide) return null;
-        return createTickerHelper(type, dev.invgrid.InvGridRegistry.CABLE_BLOCK_ENTITY_IGNORED(), BioBurnerBlockEntity::serverTick);
+        if (type != InvGridRegistry.BIO_BURNER_BLOCK_ENTITY.get()) return null;
+        return (BlockEntityTicker<T>) (BlockEntityTicker<BioBurnerBlockEntity>) BioBurnerBlockEntity::serverTick;
     }
 
-    /** Kept simple: drop contents on break handled by block entity's getDrops default. */
+    /** Drops the fuel contents on break. */
     @Override
     public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean movedByPiston) {
         if (!state.is(newState.getBlock())) {

@@ -6,7 +6,6 @@ import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.Containers;
 import net.minecraft.world.SimpleContainer;
-import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
@@ -23,16 +22,15 @@ import org.jetbrains.annotations.Nullable;
 /**
  * Generator block entity: burns fuel items and converts them to Forge Energy.
  * Each tick it:
- *  1. If not burning and buffer below max, pulls the next burnable item and
- *     starts a burn cycle (full burn-time, 40 FE/t base).
+ *  1. If not burning, pulls the next burnable item from the input slot and
+ *     starts a burn cycle (full furnace burn-time, FE_PER_TICK FE/tick).
  *  2. Pushes buffered energy to any adjacent IEnergyStorage that accepts FE
- *     (consumers or GridCable segments), distributing across all accepting
- *     sides.
+ *     (consumers or GridCable segments).
  */
 public class BioBurnerBlockEntity extends BlockEntity {
 
     public static final int CAPACITY = 20_000;   // FE buffered
-    public static final int MAX_OUTPUT = 512;    // FE/tick pushed out per side budget
+    public static final int MAX_OUTPUT = 512;    // FE/tick pushed out per side
     public static final int FE_PER_TICK = 40;    // generation rate while burning
 
     private final ItemStackHandler inventory = new ItemStackHandler(1);
@@ -43,7 +41,7 @@ public class BioBurnerBlockEntity extends BlockEntity {
     private int burnTimeTotal;       // total ticks of current fuel item
 
     public BioBurnerBlockEntity(BlockPos pos, BlockState state) {
-        super(InvGridRegistry.BLOCK_ENTITY_TYPES.get("invgrid:bio_burner"), pos, state);
+        super(InvGridRegistry.BIO_BURNER_BLOCK_ENTITY.get(), pos, state);
     }
 
     /** Called from the block's ticker on the server each tick. */
