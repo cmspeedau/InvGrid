@@ -1,0 +1,28 @@
+# InvGrid (modid: invgrid)
+
+modLoader="javafml"
+loaderVersion="[47,)"
+license="MIT"
+
+[[mods]]
+modId="invgrid"
+version="0.1.0"
+displayName="InvGrid"
+authors="cmspeedau"
+description='''
+Standalone networked Inventory Panels and a lightweight storage grid.
+'''
+
+[[dependencies.invgrid]]
+    modId="forge"
+    mandatory=true
+    versionRange="[47,)"
+    ordering="NONE"
+    side="BOTH"
+
+[[dependencies.invgrid]]
+    modId="minecraft"
+    mandatory=true
+    versionRange="[1.20.1,1.21)"
+    ordering="NONE"
+    side="BOTH"
