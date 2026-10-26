@@ -1,50 +1,25 @@
 package dev.invgrid.network;
 
-import dev.invgrid.menu.InventoryPanelMenu;
-import net.minecraft.network.FriendlyByteBuf;
+import dev.invgrid.block.entity.InventoryPanelBlockEntity;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
-import net.minecraftforge.network.NetworkEvent;
 
-import java.util.ArrayList;
 import java.util.List;
-import java.util.function.Supplier;
 
 /**
- * S2C: syncs a snapshot of the grid's item index into the open
- * InventoryPanelMenu so the client can render grid contents.
+ * Server helper: sends the current filtered snapshot to every player whose
+ * open container menu is bound to this panel. Called from the panel BE tick.
  */
-public class SyncGridSnapshotPacket {
+public final class SyncGridSnapshotPacket {
 
-    private final List<ItemStack> items;
+    private SyncGridSnapshotPacket() {}
 
-    public SyncGridSnapshotPacket(List<ItemStack> items) {
-        this.items = items;
-    }
-
-    public static void encode(SyncGridSnapshotPacket pkt, FriendlyByteBuf buf) {
-        buf.writeCollection(pkt.items, FriendlyByteBuf::writeItem);
-    }
-
-    public static SyncGridSnapshotPacket decode(FriendlyByteBuf buf) {
-        List<ItemStack> items = buf.readCollection(ArrayList::new, FriendlyByteBuf::readItem);
-        return new SyncGridSnapshotPacket(items);
-    }
-
-    public static void handle(SyncGridSnapshotPacket pkt, Supplier<NetworkEvent.Context> ctx) {
-        ctx.get().enqueueWork(() -> {
-            // Client side only
-            if (ctx.get().getSender() != null) return;
-            if (ctx.get().get().get().menu instanceof InventoryPanelMenu menu) {
-                menu.updateSnapshot(pkt.items);
+    public static void sendToOpenMenus(InventoryPanelBlockEntity panel, List<ItemStack> snapshot) {
+        for (ServerPlayer player : panel.getLevel().players()) {
+            if (player.containerMenu instanceof dev.invgrid.menu.InventoryPanelMenu menu
+                    && menu.matchesPanel(panel)) {
+                ModNetworking.sendToPlayer(new SyncGridSnapshotPayload(snapshot), player);
             }
-        });
-        ctx.get().setPacketHandled(true);
-    }
-
-    /** Helper for the server to push a snapshot to a player with a panel open. */
-    public static void sendTo(ServerPlayer player, List<ItemStack> snapshot) {
-        ModNetworking.CHANNEL.sendTo(new SyncGridSnapshotPacket(snapshot),
-                player.connection.connection, net.minecraftforge.network.NetworkDirection.PLAY_TO_CLIENT);
+        }
     }
 }
