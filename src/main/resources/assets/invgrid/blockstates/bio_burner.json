@@ -1,0 +1,6 @@
+{
+  "variants": {
+    "lit=false": { "model": "invgrid:block/bio_burner" },
+    "lit=true": { "model": "invgrid:block/bio_burner_lit" }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "parent": "block/cube_all",
+  "textures": {
+    "all": "invgrid:block/bio_burner_lit"
+  }
+}

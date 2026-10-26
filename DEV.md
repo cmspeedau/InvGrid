@@ -1,14 +1,9 @@
-# InvGrid — Development
+## v0.2 — Power & Interaction
 
-NeoForge/Forge 1.20.1, Java 17.
-
-- Build: `./gradlew build`
-- Run client: `./gradlew runClient`
-
-## v0.1 TODO
-- [ ] Register proper BlockEntityType for StorageCrateBlockEntity
-- [ ] Implement cable BFS flood-fill in `Grid.rebuildMembers`
-- [ ] IItemHandler index snapshot in `Grid.indexItems`
-- [ ] Panel GUI screen (client) + search box
-- [ ] Custom cable block with connectable shape
-- [ ] Textures (placeholder grey blocks currently)
+- [x] Bio Burner block + BE scaffold (blockstate, lit variant, recipe, organic-fuel slot)
+- [ ] Register `BioBurnerBlockEntity` BlockEntityType (fixes placeholder super-call in BE)
+- [ ] Organic fuel table (saplings / seeds / kelp / crops — NOT logs or coal)
+- [ ] FE capability + burn tick loop + push-to-neighbors
+- [ ] Grid.rebuildMembers BFS flood-fill
+- [ ] Panel GUI screen + search box
+- [ ] Hopper access to burner fuel slot

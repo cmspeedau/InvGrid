@@ -1,0 +1,13 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    " P ",
+    "PLP",
+    " P "
+  ],
+  "key": {
+    "P": { "tag": "minecraft:planks" },
+    "L": { "tag": "minecraft:logs" }
+  },
+  "result": { "item": "invgrid:bio_burner" }
+}
