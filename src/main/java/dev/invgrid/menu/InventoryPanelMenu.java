@@ -1,101 +1,96 @@
 package dev.invgrid.menu;
 
-import dev.invgrid.blockentity.InventoryPanelBlockEntity;
+import dev.invgrid.network.SyncGridSnapshotPacket;
+import dev.invgrid.registry.ModMenus;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
-import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
-/**
- * Menu for the Basic Inventory Panel.
- *
- * Layout:
- *  - Slot 0..53   : grid snapshot slots (virtual, read-only until v0.2)
- *  - Slot 54..80  : player inventory
- *  - Slot 81..89  : player hotbar
- */
 public class InventoryPanelMenu extends AbstractContainerMenu {
 
-    public static final int GRID_SIZE = 54; // 9x6 grid snapshot
-    public static final int PLAYER_INV_START = GRID_SIZE;
-    public static final int HOTBAR_START = PLAYER_INV_START + 36;
-    public static final int SLOT_COUNT = HOTBAR_START + 9;
+    public static final int GRID_COLS = 9;
+    public static final int GRID_ROWS = 6;
+    public static final int PLAYER_INV_X = 8;
+    public static final int PLAYER_INV_Y = 148;
 
-    private final InventoryPanelBlockEntity panel;
-    private final Player player;
+    /** Client-side mirror of the grid contents, filtered by the search box. */
+    private final List<ItemStack> snapshot = new ArrayList<>();
 
-    /** Client-side only: the current snapshot of grid contents. */
-    private List<ItemStack> snapshot = List.of();
-
-    /** Client-side only: current search filter text. */
     private String filter = "";
 
-    public InventoryPanelMenu(int id, Inventory playerInv, InventoryPanelBlockEntity panel) {
-        super(ModMenus.INVENTORY_PANEL.get(), id);
-        this.panel = panel;
-        this.player = playerInv.player;
+    public InventoryPanelMenu(int windowId, Inventory playerInv, FriendlyByteBuf data) {
+        this(windowId, playerInv);
+    }
 
-        // Virtual read-only grid snapshot slots; interactions land in v0.2.
-        for (int i = 0; i < GRID_SIZE; i++) {
-            int x = 8 + (i % 9) * 18;
-            int y = 18 + (i / 9) * 18;
-            this.addSlot(new Slot(net.minecraft.world.SimpleContainer.EMPTY, i, x, y) {
-                @Override
-                public boolean mayPlace(ItemStack stack) { return false; }
-                @Override
-                public boolean mayPickup(Player p) { return false; }
-            });
-        }
+    public InventoryPanelMenu(int windowId, Inventory playerInv) {
+        super(ModMenus.INVENTORY_PANEL.get(), windowId);
 
-        // Player inventory
-        for (int row = 0; row < 3; row++) {
-            for (int col = 0; col < 9; col++) {
-                this.addSlot(new Slot(playerInv, col + row * 9 + 9, 8 + col * 18, 140 + row * 18));
+        // 54 virtual, read-only grid slots (8px gap in bg between search and grid)
+        for (int row = 0; row < GRID_ROWS; row++) {
+            for (int col = 0; col < GRID_COLS; col++) {
+                int index = row * GRID_COLS + col;
+                this.slots.add(new GridSnapshotSlot(this, index, 8 + col * 18, 30 + row * 18));
             }
         }
-        // Hotbar
-        for (int col = 0; col < 9; col++) {
-            this.addSlot(new Slot(playerInv, col, 8 + col * 18, 198));
-        }
+
+        // Player inventory + hotbar
+        for (int row = 0; row < 3; row++)
+            for (int col = 0; col < 9; col++)
+                this.addSlot(new net.minecraft.world.inventory.Slot(playerInv,
+                        9 + row * 9 + col, PLAYER_INV_X + col * 18, PLAYER_INV_Y + row * 18));
+        for (int col = 0; col < 9; col++)
+            this.addSlot(new net.minecraft.world.inventory.Slot(playerInv, col,
+                    PLAYER_INV_X + col * 18, PLAYER_INV_Y + 58));
     }
 
-    /** Factory used on the client when the server sends the open packet. */
-    public static InventoryPanelMenu clientCreate(int id, Inventory inv, FriendlyByteBuf buf) {
-        return new InventoryPanelMenu(id, inv, null);
+    /** Server: push a fresh (filtered) snapshot to the viewing player. */
+    public void pushSnapshot(ServerPlayer player, List<ItemStack> gridItems) {
+        List<ItemStack> filtered = gridItems.stream()
+                .filter(s -> filter.isEmpty()
+                        || s.getHoverName().getString().toLowerCase().contains(filter.toLowerCase()))
+                .toList();
+        SyncGridSnapshotPacket.sendTo(player, filtered);
     }
 
-    public void setSnapshot(List<ItemStack> snapshot) {
-        this.snapshot = snapshot;
+    public void updateSnapshot(List<ItemStack> items) {
+        snapshot.clear();
+        snapshot.addAll(items);
     }
 
-    public List<ItemStack> getSnapshot() {
-        return snapshot;
-    }
-
-    public void setFilter(String filter) {
-        this.filter = filter == null ? "" : filter.toLowerCase();
+    public void setFilter(String query) {
+        this.filter = query == null ? "" : query;
+        // Server hook: in v0.2 this triggers GridManager.reindexAndPush(owner)
     }
 
     public String getFilter() {
         return filter;
     }
 
-    public InventoryPanelBlockEntity getPanel() {
-        return panel;
+    public List<ItemStack> getSnapshot() {
+        return snapshot;
+    }
+
+    /** Server-side extraction. Returns empty until grid indexing lands (v0.2). */
+    public Optional<ItemStack> tryExtract(ServerPlayer player, int slotIndex, boolean shift) {
+        if (slotIndex < 0 || slotIndex >= GRID_COLS * GRID_ROWS) return Optional.empty();
+        // TODO v0.2: resolve grid via GridManager, pull stack, update snapshot.
+        return Optional.empty();
     }
 
     @Override
-    public boolean stillValid(Player p) {
-        return panel == null || panel.isStillValid(p);
+    public ItemStack quickMoveStack(Player player, int index) {
+        return ItemStack.EMPTY; // shift-click handled by extract packet, not slot logic
     }
 
     @Override
-    public ItemStack quickMoveStack(Player p, int index) {
-        // v0.1: read-only grid, shift-click does nothing yet.
-        return ItemStack.EMPTY;
+    public boolean stillValid(Player player) {
+        return player.distanceToSqr(0, 0, 0) < 1e7 || !player.level().isClientSide; // grid range check lands in v0.2
     }
 }
