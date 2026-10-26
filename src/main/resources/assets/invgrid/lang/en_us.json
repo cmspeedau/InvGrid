@@ -1,11 +1,5 @@
 {
-  "item.invgrid.grid_card": "Grid Card",
-  "item.invgrid.remote_control": "InvGrid Remote",
-  "block.invgrid.grid_hub": "Grid Hub",
-  "block.invgrid.invgrid_cable": "InvGrid Cable",
-  "block.invgrid.inventory_panel": "Inventory Panel",
-  "block.invgrid.inventory_panel_advanced": "Advanced Inventory Panel",
-  "block.invgrid.inventory_panel_elite": "Elite Inventory Panel",
-  "block.invgrid.storage_crate": "Storage Crate",
-  "itemGroup.invgrid": "InvGrid"
+  "menu.invgrid.inventory_panel.title": "Inventory Panel",
+  "gui.invgrid.inventory_panel.search": "Search",
+  "gui.invgrid.inventory_panel.search_hint": "Search grid..."
 }
