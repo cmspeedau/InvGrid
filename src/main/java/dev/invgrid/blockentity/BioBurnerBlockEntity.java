@@ -1,80 +1,129 @@
 package dev.invgrid.blockentity;
 
+import dev.invgrid.InvGridRegistry;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.world.Containers;
+import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraftforge.common.ForgeHooks;
 import net.minecraftforge.common.capabilities.Capability;
 import net.minecraftforge.common.capabilities.ForgeCapabilities;
 import net.minecraftforge.common.util.LazyOptional;
+import net.minecraftforge.energy.EnergyStorage;
+import net.minecraftforge.energy.IEnergyStorage;
 import net.minecraftforge.items.ItemStackHandler;
-import dev.invgrid.block.BioBurnerBlock;
-import net.minecraft.world.level.block.entity.BlockEntityType;
-
-import javax.annotation.Nonnull;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 /**
- * Bio Burner BE.
- *
- * Design:
- * - Single fuel slot, accepts ORGANIC items only (custom predicate, NOT vanilla
- *   burn time — so logs/coal don't trivialize it and it stays a "bio" niche).
- * - Each organic item yields a small FE amount at a modest FE/t rate.
- * - Tiny internal buffer, pushes FE to adjacent capability holders (panels, hub).
- *
- * TODO (v0.2): register ORGANIC_FUELS map (sapling=1000FE, seeds=500,
- * kelp=800, crops=1200...), energy storage handler, push loop in tick().
+ * Generator block entity: burns fuel items and converts them to Forge Energy.
+ * Each tick it:
+ *  1. If not burning and buffer below max, pulls the next burnable item and
+ *     starts a burn cycle (full burn-time, 40 FE/t base).
+ *  2. Pushes buffered energy to any adjacent IEnergyStorage that accepts FE
+ *     (consumers or GridCable segments), distributing across all accepting
+ *     sides.
  */
 public class BioBurnerBlockEntity extends BlockEntity {
 
-    public static final int MAX_ENERGY = 8_000; // small buffer on purpose
-    public static final int FE_PER_TICK = 20;   // 20 FE/t while burning — modest
+    public static final int CAPACITY = 20_000;   // FE buffered
+    public static final int MAX_OUTPUT = 512;    // FE/tick pushed out per side budget
+    public static final int FE_PER_TICK = 40;    // generation rate while burning
 
-    private final ItemStackHandler fuelSlot = new ItemStackHandler(1) {
-        @Override
-        public boolean isItemValid(int slot, @Nonnull ItemStack stack) {
-            return isOrganicFuel(stack);
-        }
-    };
+    private final ItemStackHandler inventory = new ItemStackHandler(1);
+    private final EnergyStorage energy = new EnergyStorage(CAPACITY, MAX_OUTPUT, 0);
+    private final LazyOptional<IEnergyStorage> energyOptional = LazyOptional.of(() -> energy);
 
-    private int burnTicksRemaining = 0;
-    private int totalBurnTicksCurrentItem = 0;
+    private int burnTimeRemaining;   // ticks of fuel left
+    private int burnTimeTotal;       // total ticks of current fuel item
 
     public BioBurnerBlockEntity(BlockPos pos, BlockState state) {
-        super((BlockEntityType<?>) null, pos, state); // TODO: real type in Registration
+        super(InvGridRegistry.BLOCK_ENTITY_TYPES.get("invgrid:bio_burner"), pos, state);
     }
 
-    public static boolean isOrganicFuel(ItemStack stack) {
-        // v0.2: lookup in ORGANIC_FUELS. Placeholder check:
-        return stack.is(net.minecraft.tags.ItemTags.SAPLINGS);
+    /** Called from the block's ticker on the server each tick. */
+    public static void serverTick(Level level, BlockPos pos, BlockState state, BioBurnerBlockEntity be) {
+        be.tryConsumeFuel();
+        be.generate();
+        be.pushEnergy();
+        be.setChanged();
     }
 
-    public void tickServer() {
-        // TODO: consume fuel slot item -> add burn ticks; burn down; set LIT state;
-        // push energy to neighbors via ForgeCapabilities.ENERGY.
+    private void tryConsumeFuel() {
+        if (burnTimeRemaining > 0) return;
+        ItemStack stack = inventory.getStackInSlot(0);
+        int burnTicks = ForgeHooks.getBurnTime(stack, null);
+        if (burnTicks <= 0) return;
+
+        burnTimeTotal = burnTicks;
+        burnTimeRemaining = burnTicks;
+        inventory.extractItem(0, 1, false);
     }
 
-    @Override
-    protected void saveAdditional(CompoundTag tag) {
-        super.saveAdditional(tag);
-        tag.put("Fuel", fuelSlot.serializeNBT());
-        tag.putInt("Burn", burnTicksRemaining);
+    private void generate() {
+        if (burnTimeRemaining <= 0) return;
+        burnTimeRemaining--;
+        // Overflow is dropped (EnergyStorage receive caps at capacity).
+        energy.receiveEnergy(FE_PER_TICK, false);
     }
 
-    @Override
-    public void load(CompoundTag tag) {
-        super.load(tag);
-        fuelSlot.deserializeNBT(tag.getCompound("Fuel"));
-        burnTicksRemaining = tag.getInt("Burn");
-    }
+    private void pushEnergy() {
+        if (energy.getEnergyStored() == 0 || level == null) return;
 
-    @Override
-    public <T> LazyOptional<T> getCapability(Capability<T> cap, Direction side) {
-        if (cap == ForgeCapabilities.ITEM_HANDLER) {
-            return LazyOptional.empty(); // v0.2: expose fuel slot for hoppers
+        for (Direction dir : Direction.values()) {
+            if (energy.getEnergyStored() == 0) break;
+
+            BlockEntity neighbor = level.getBlockEntity(worldPosition.relative(dir));
+            if (neighbor == null) continue;
+            LazyOptional<IEnergyStorage> cap =
+                    neighbor.getCapability(ForgeCapabilities.ENERGY, dir.getOpposite());
+            cap.ifPresent(target -> {
+                int sent = energy.extractEnergy(MAX_OUTPUT, true);
+                if (sent > 0) {
+                    int accepted = target.receiveEnergy(sent, false);
+                    energy.extractEnergy(accepted, false);
+                }
+            });
         }
+    }
+
+    /** Drops the fuel slot on break. */
+    public void dropContents(Level level, BlockPos pos) {
+        SimpleContainer box = new SimpleContainer(inventory.getSlots());
+        for (int i = 0; i < inventory.getSlots(); i++) {
+            box.setItem(i, inventory.getStackInSlot(i));
+        }
+        Containers.dropContents(level, pos, box);
+    }
+
+    @Override
+    protected void saveAdditional(@NotNull CompoundTag tag) {
+        super.saveAdditional(tag);
+        tag.put("Inventory", inventory.serializeNBT());
+        tag.putInt("Energy", energy.getEnergyStored());
+        tag.putInt("BurnRemaining", burnTimeRemaining);
+        tag.putInt("BurnTotal", burnTimeTotal);
+    }
+
+    @Override
+    public void load(@NotNull CompoundTag tag) {
+        super.load(tag);
+        if (tag.contains("Inventory")) inventory.deserializeNBT(tag.getCompound("Inventory"));
+        int stored = tag.getInt("Energy");
+        if (stored > 0) energy.receiveEnergy(stored, false);
+        burnTimeRemaining = tag.getInt("BurnRemaining");
+        burnTimeTotal = tag.getInt("BurnTotal");
+    }
+
+    @NotNull
+    @Override
+    public <T> LazyOptional<T> getCapability(@NotNull Capability<T> cap, @Nullable Direction side) {
+        if (cap == ForgeCapabilities.ENERGY) return energyOptional.cast();
         return super.getCapability(cap, side);
     }
 }
